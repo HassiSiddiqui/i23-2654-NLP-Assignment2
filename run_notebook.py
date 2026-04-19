@@ -1,4 +1,9 @@
 """Execute the notebook in-place using nbconvert API."""
+import sys, io
+# Force UTF-8 output on Windows to avoid UnicodeEncodeError with Urdu text
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
 import os
@@ -14,8 +19,7 @@ try:
     ep.preprocess(nb, {'metadata': {'path': '.'}})
     print("Notebook executed successfully!")
 except Exception as e:
-    print(f"Error during execution: {e}")
-    # Still save partial results
+    print(f"Error during execution: {str(e).encode('utf-8', 'replace').decode('utf-8')}")
     print("Saving partial results...")
 
 with open(nb_path, 'w', encoding='utf-8') as f:

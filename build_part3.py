@@ -11,7 +11,7 @@ cells = []
 cells.append(md("# Part 3 — Transformer Encoder [20 marks]"))
 cells.append(md("## Section 6: Dataset Preparation for Classification"))
 cells.append(code(r"""# ── Prepare classification dataset ──
-MAX_SEQ_LEN = 256
+MAX_SEQ_LEN = 64  # keep small to avoid OOM on 8GB RAM
 NUM_CLASSES = 5
 TOPIC_LIST = ['Politics', 'Sports', 'Economy', 'International', 'Health_Society']
 topic2label = {t: i for i, t in enumerate(TOPIC_LIST)}
@@ -58,9 +58,9 @@ def make_cls_batch(data, indices, max_len=256):
             torch.tensor(labels, dtype=torch.long),
             torch.tensor(masks, dtype=torch.float32))
 
-X_cls_train, Y_cls_train, M_cls_train = make_cls_batch(cls_data, train_i)
-X_cls_val, Y_cls_val, M_cls_val = make_cls_batch(cls_data, val_i)
-X_cls_test, Y_cls_test, M_cls_test = make_cls_batch(cls_data, test_i)
+X_cls_train, Y_cls_train, M_cls_train = make_cls_batch(cls_data, train_i, MAX_SEQ_LEN)
+X_cls_val, Y_cls_val, M_cls_val = make_cls_batch(cls_data, val_i, MAX_SEQ_LEN)
+X_cls_test, Y_cls_test, M_cls_test = make_cls_batch(cls_data, test_i, MAX_SEQ_LEN)
 print(f"Train batch shape: {X_cls_train.shape}")"""))
 
 cells.append(md("## Section 7: Transformer Encoder (from scratch)"))
@@ -99,7 +99,8 @@ class MultiHeadSelfAttention(nn.Module):
             Q = self.W_Q[i](x)
             K = self.W_K[i](x)
             V = self.W_V[i](x)
-            head_mask = mask.unsqueeze(1).unsqueeze(2) if mask is not None else None
+            # mask: (B, seq_len) -> (B, 1, seq_len) for broadcast over (B, seq_len, seq_len)
+            head_mask = mask.unsqueeze(1) if mask is not None else None
             head_out, attn_w = self.attention(Q, K, V, head_mask)
             heads.append(head_out)
             attn_weights_all.append(attn_w)
@@ -152,7 +153,7 @@ class TransformerClassifier(nn.Module):
                  n_layers=4, n_classes=5, max_len=256, dropout=0.1):
         super().__init__()
         self.token_emb = nn.Embedding(vocab_size + 1, d_model, padding_idx=0)  # +1 for CLS
-        self.pos_enc = SinusoidalPositionalEncoding(d_model, max_len)
+        self.pos_enc = SinusoidalPositionalEncoding(d_model, max_len + 10)
         self.layers = nn.ModuleList([EncoderBlock(d_model, n_heads, d_ff, dropout) for _ in range(n_layers)])
         self.ln_final = nn.LayerNorm(d_model)
         self.classifier = nn.Sequential(

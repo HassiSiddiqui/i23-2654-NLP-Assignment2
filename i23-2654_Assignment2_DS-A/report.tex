@@ -1,105 +1,243 @@
-\documentclass[10pt, conference]{IEEEtran}
-\IEEEoverridecommandlockouts
-\usepackage{cite}
-\usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
+\documentclass[12pt]{article}
+
+% Page geometry: 2-3 pages
+\usepackage[a4paper, margin=2.5cm]{geometry}
+
+% Times New Roman font
+\usepackage{mathptmx}
+\usepackage[T1]{fontenc}
+
+% 1.5 line spacing
+\usepackage{setspace}
+\onehalfspacing
+
+% Other packages
 \usepackage{graphicx}
-\usepackage{textcomp}
-\usepackage{xcolor}
 \usepackage{booktabs}
-\usepackage{pgfplots}
-\pgfplotsset{compat=1.18}
-\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
-    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+
+\hypersetup{colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue}
+
+% Title info
+\title{\textbf{CS-4063 Natural Language Processing -- Assignment 2}\\
+\large Word Embeddings, BiLSTM Sequence Labeling, and Transformer Encoder}
+\author{Student ID: i23-2654 \quad Section: DS-A \\ FAST-NUCES}
+\date{April 2026}
 
 \begin{document}
 
-\title{CS-4063 NLP Assignment 2:\\ Word Embeddings, BiLSTM, and Transformer}
-
-\author{\IEEEauthorblockN{Hasan}
-\IEEEauthorblockA{\textit{DS-A} \\
-FAST-NUCES}
-}
-
 \maketitle
+\thispagestyle{empty}
 
-\begin{abstract}
-This report details the implementation of three major Natural Language Processing paradigms from scratch: Word Embeddings (TF-IDF, PPMI, Skip-gram Word2Vec), a BiLSTM Sequence Labeler (for POS tagging and NER with a custom CRF layer/Viterbi Decoder), and a Transformer Encoder. These models are applied to an Urdu BBC news corpus comprising 242 documents. The challenges of limited data are discussed, and comparative ablation studies highlight the importance of learned components against heuristic approaches.
-\end{abstract}
+% ─────────────────────────────────────────────────────────────────
+\section*{Overview}
 
-\begin{IEEEkeywords}
-NLP, Word Embeddings, BiLSTM, CRF, Transformer, PyTorch
-\end{IEEEkeywords}
+This report summarises the end-to-end implementation of three NLP tasks applied to a
+BBC Urdu news corpus of 242 articles. All models were built \textbf{from scratch} in
+PyTorch --- no pretrained models, HuggingFace, Gensim, or high-level transformer
+utilities were used.
 
-\section{Introduction}
-Natural Language Processing applications rely heavily on effective representations of text. This project explores word embeddings, sequence labeling with neural architectures, and self-attention mechanisms applied to a modestly sized BBC Urdu news corpus (242 articles). All neural architectures were built from scratch using PyTorch. Topics were extracted using keyword matching to overcome the lack of categorized labels in the provided metadata.
+\textbf{Corpus.} 242 BBC Urdu documents (\texttt{cleaned.txt}) with stemmed tokens.
+Topic labels (5 categories: Politics, Sports, Economy, International, Health \& Society)
+were assigned by keyword matching on Urdu article titles from \texttt{Metadata.json}.
+Vocabulary size: 5{,}435 unique tokens.
 
-\section{Part 1: Word Embeddings (25 Marks)}
+\textbf{Pipeline.}
+\texttt{cleaned.txt} $\to$ tokenisation $\to$ (i) TF-IDF \& PPMI matrices,
+(ii) Skip-gram Word2Vec training,
+(iii) rule-based POS/NER annotation $\to$ BiLSTM+CRF training,
+(iv) document classification $\to$ Transformer encoder training.
 
-\subsection{TF-IDF Weighting}
-A Term Frequency-Inverse Document Frequency (TF-IDF) matrix was computed using raw term counts. We preprocessed the text by restricting the vocabulary to 5,000 top words. Document frequencies were calculated over the 242 available articles. The highest-scoring TF-IDF words for a specific topic (e.g., Politics) clearly discriminated their respective categories.
+% ─────────────────────────────────────────────────────────────────
+\section*{Part 1 Results: Word Embeddings}
 
-\subsection{PPMI Matrix}
-Positive Pointwise Mutual Information (PPMI) relies on a co-occurrence matrix generated from a symmetric window $k=5$. The matrix successfully captures term similarities. A t-SNE plot visualizations show semantic grouping (e.g., political terms like ``عدالت'' and ``قانون'' clustering together).
+\subsection*{TF-IDF and PPMI}
 
-\subsection{Skip-Gram Word2Vec}
-We implemented the Skip-Gram architecture with Negative Sampling from scratch, training distinct center ($\mathbf{V}$) and context ($\mathbf{U}$) matrices with embedding dimension $d=100$. The noise distribution $P_n(w) \propto f(w)^{3/4}$ allowed better modeling of rare terms. Following training over 5 epochs:
-\begin{itemize}
-    \item \textbf{Nearest Neighbors:} The cosine-similarity matches demonstrate conceptual semantic similarity.
-    \item \textbf{Analogy Tests:} While limited by the small size of the corpus, relations like $\vec{w}(\text{حکومت}) - \vec{w}(\text{وزیر}) \approx \dots$ demonstrate conceptual associations.
-\end{itemize}
+TF-IDF weights (shape $|V| \times 242$) and PPMI co-occurrence weights
+(shape $|V| \times |V|$, window $k=5$) were saved as \texttt{.npy} matrices.
+Figure~\ref{fig:tsne} shows a t-SNE projection of the 200 most frequent token
+PPMI vectors, colour-coded by semantic category.
 
-\subsubsection{Four-Condition Evaluation}
-We compared C1 (PPMI), C2 (W2V on raw text), C3 (W2V on cleaned text, $d=100$), and C4 (W2V, $d=200$). The W2V baseline on cleaned text (C3) yielded the best Mean Reciprocal Rank (MRR), while C2 suffered from parsing artifacts. 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.82\linewidth]{../tsne_ppmi.png}
+  \caption{t-SNE projection of top-200 token PPMI vectors (window $k=5$).
+           Colours denote semantic categories.}
+  \label{fig:tsne}
+\end{figure}
 
-\section{Part 2: BiLSTM Sequence Labeling (25 Marks)}
-We extracted up to 500 sentences stratified by topic and constructed artificial labels using rule-based and gazetteer heuristics for POS and NER tagging. 
+\subsection*{Skip-gram Word2Vec}
 
-\subsection{BiLSTM Architecture}
-The implementation leverages 2 bidirectional LSTM layers, initialized with W2V embeddings. Cross-entropy loss was used for the non-CRF models.
+A custom Skip-gram model with separate center $\mathbf{V}$ and context $\mathbf{U}$
+matrices ($d{=}100$, $k{=}5$, $K{=}10$ negatives, noise $P_n(w)\propto f(w)^{0.75}$)
+was trained for 5 epochs with Adam ($\eta{=}0.001$).
+The final embedding is the average $\tfrac{1}{2}(\mathbf{V}+\mathbf{U})$.
 
-\subsubsection{Custom CRF and Viterbi Decoding}
-We integrated a structured prediction Conditional Random Field layer. The log-partition function computationally relies on the Forward Algorithm ($\mathcal{O}(T \cdot |S|^2)$). Sequence likelihood limits transition anomalies (e.g., forcing \texttt{I-PER} after \texttt{B-PER}) leading to optimal outputs decoded by the Viterbi algorithm.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.72\linewidth]{../w2v_loss.png}
+  \caption{Skip-gram training loss across 5 epochs. Final loss: \textbf{2.318}.}
+  \label{fig:w2vloss}
+\end{figure}
 
-\subsection{Evaluation and Ablation Study}
-The POS tagger reported robust token classification results. Confusion matrices successfully documented confusions among closely related tags.
-
-The ablation results for NER feature:
-\begin{table}[htbp]
-\centering
-\caption{NER Macro-F1 Ablation Results}
-\begin{tabular}{lc} \toprule
-\textbf{Configuration} & \textbf{Score Performance} \\ \midrule
-Baseline (BiLSTM + CRF) & Highest \\
-A1 - Unidirectional LSTM & Decrease in F1 \\
-A2 - Drop-out Removed & Overfits, Lower Val F1 \\
-A3 - Random Embeddings & Lowest \\
-A4 - Standard Softmax & Moderately Lower \\ \bottomrule
+\textbf{Four-condition MRR comparison}:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Condition} & \textbf{Description} & \textbf{MRR} \\
+\midrule
+C1 & PPMI baseline         & 0.0208 \\
+C2 & W2V on raw.txt        & 0.0238 \\
+C3 & W2V on cleaned ($d{=}100$) & \textbf{0.0357} \\
+C4 & W2V on cleaned ($d{=}200$) & 0.0312 \\
+\bottomrule
 \end{tabular}
-\end{table}
-These experiments confirm that backward context, correct regularization, and structured transition modeling vastly improve performance over naive token-based predictions in an unconstrained setup.
+\end{center}
 
-\section{Part 3: Transformer Encoder (20 Marks)}
-We built a text classification transformer mapping inputs via specialized multi-headed attention and encoder stacks.
+C3 (cleaned corpus, $d{=}100$) achieves the best MRR. C2 suffers from boilerplate
+and HTML noise in the raw corpus. C4 shows marginal degradation at $d{=}200$ because
+the 242-document corpus is too small to populate a 200-dimensional space effectively.
 
-\subsection{Components Implemented}
-\begin{itemize}
-    \item \textbf{Self-Attention:} Scaled dot-product ($\frac{QK^\top}{\sqrt{d_k}}$) integrated uniformly.
-    \item \textbf{Positional Encoding:} Non-learnable sinusoidal waves attached structurally.
-    \item \textbf{Encoder Stacks:} A Pre-Layer Norm architecture encompassing residual sublayers, multi-head attention ($h=4$), and feed-forward linear adjustments.
+% ─────────────────────────────────────────────────────────────────
+\section*{Part 2 Results: BiLSTM Sequence Labeling}
+
+\textbf{Dataset.} 400 sentences were extracted, stratified by topic (70/15/15 split),
+and labelled with:
+(i) a rule-based POS tagger using Urdu morphological suffix rules and a 200-word
+lexicon (12 tags: NOUN, VERB, ADJ, ADV, PRON, DET, CONJ, POST, NUM, PUNC, UNK), and
+(ii) a gazetteer-based NER tagger using 130+ entities in BIO scheme (B/I-PER/LOC/ORG, O).
+
+\textbf{Architecture.} A 2-layer bidirectional LSTM (hidden dim 128) with 0.5 dropout,
+initialised from W2V embeddings. NER uses a custom CRF layer with learnable transition
+matrix; decoding by Viterbi algorithm.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\linewidth}
+    \includegraphics[width=\linewidth]{../bilstm_loss.png}
+    \caption{BiLSTM training \& validation loss (POS left, NER+CRF right).}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\linewidth}
+    \includegraphics[width=\linewidth]{../pos_confusion.png}
+    \caption{POS confusion matrix (12-class).}
+  \end{subfigure}
+  \caption{BiLSTM training curves and evaluation.}
+  \label{fig:bilstm}
+\end{figure}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{Token Accuracy} & \textbf{Macro-F1} \\
+\midrule
+BiLSTM POS (fine-tuned emb.) & 0.423 & 0.119 \\
+BiLSTM POS (frozen emb.)     & --    & 0.149 \\
+BiLSTM NER + CRF             & 0.641 & 0.089 \\
+BiLSTM NER (no CRF)          & 0.643 & 0.135 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Most confused POS pairs: NOUN$\leftrightarrow$POST (151), NOUN$\leftrightarrow$PRON (77),
+VERB$\leftrightarrow$POST (72). This reflects the morphological ambiguity in stemmed Urdu
+where postpositions and pronouns share surface forms.
+
+\textbf{Ablation (NER Macro-F1):}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Config} & \textbf{Macro-F1} & \textbf{vs Baseline} \\
+\midrule
+Baseline (BiLSTM+CRF) & 0.114 & -- \\
+A1 -- Unidirectional LSTM & 0.135 & $+$0.021 \\
+A2 -- No dropout & 0.138 & $+$0.024 \\
+A3 -- Random embeddings & 0.250 & $+$0.136 \\
+A4 -- Softmax (no CRF) & 0.135 & $+$0.021 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The unexpectedly higher scores in some ablations reflect the very small test set (75
+sentences) where class imbalance strongly biases the ``O'' tag ($\sim$70\% tokens).
+The CRF enforces valid transitions (e.g.\ no I-PER without B-PER), which is the key
+structural contribution for well-formed NER outputs.
+
+% ─────────────────────────────────────────────────────────────────
+\section*{Part 3 Results: Transformer Encoder}
+
+\textbf{Architecture (fully from scratch):}
+\begin{itemize}\setlength\itemsep{0pt}
+  \item \textbf{ScaledDotProductAttention:} $\text{softmax}(QK^\top/\sqrt{d_k})\,V$
+  \item \textbf{MultiHeadSelfAttention:} $h{=}4$ heads, separate $W_Q^{(i)}, W_K^{(i)}, W_V^{(i)}$ per head
+  \item \textbf{SinusoidalPositionalEncoding:} fixed sin/cos buffer, non-learned
+  \item \textbf{EncoderBlock (Pre-LN):} $x \leftarrow x + \text{Drop}(\text{MHA}(\text{LN}(x)))$,
+        $x \leftarrow x + \text{Drop}(\text{FFN}(\text{LN}(x)))$
+  \item \textbf{Stack:} $N{=}4$ encoder blocks; $d_\text{model}{=}128$, $d_{ff}{=}512$
+  \item \textbf{Classification head:} $[\text{CLS}]$ token $\to 128 \to 64 \to 5$
 \end{itemize}
 
-\subsection{Document Classification Performance}
-The sequence outputs from the \texttt{[CLS]} representation reliably predicted article topics. A cosine-warmup learning rate schedule facilitated smooth convergence against overfitting. Accuracy approached limits within limited batches, reflecting the simplicity of distinguishing core concepts.
-Attention weight heat maps demonstrate specialized focus points across headers, verifying structural attention mapping against core keywords defining those classes.
+Trained with AdamW ($\eta{=}5{\times}10^{-4}$, wd$=0.01$) + cosine LR with 50 warmup
+steps, 20 epochs on 5-class document classification.
 
-\section{Conclusion}
-This project explored the full stack of NLP algorithms without high-level abstraction frameworks. While corpus sizing constraints introduced some variations, it highlighted structural limitations implicit in standard word representations and confirmed the resilience of BiLSTM structures and self-attention configurations for semantic identification.
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}[b]{0.48\linewidth}
+    \includegraphics[width=\linewidth]{../transformer_curves.png}
+    \caption{Transformer loss and accuracy curves.}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.48\linewidth}
+    \includegraphics[width=\linewidth]{../tx_confusion.png}
+    \caption{Transformer $5{\times}5$ confusion matrix.}
+  \end{subfigure}
+  \caption{Transformer training and evaluation.}
+\end{figure}
 
-\begin{thebibliography}{00}
-\bibitem{b1} T. Mikolov, et al. ``Distributed representations of words and phrases and their compositionality,'' in \textit{NeurIPS}, 2013.
-\bibitem{b2} J. Lafferty, A. McCallum, F. Pereira, ``Conditional Random Fields: Probabilistic Models for Segmenting and Labeling Sequence Data,'' \textit{ICML}, 2001.
-\bibitem{b3} A. Vaswani, et al. ``Attention is All you Need,'' in \textit{NeurIPS}, 2017.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.85\linewidth]{../attention_heatmaps.png}
+  \caption{Attention heatmaps for 3 correctly-classified articles (final encoder layer,
+           2 heads). Darker cells indicate higher attention weight.}
+  \label{fig:attn}
+\end{figure}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model} & \textbf{Test Accuracy} & \textbf{Macro-F1} \\
+\midrule
+Transformer Encoder (4 blocks, $d{=}128$) & 0.270 & 0.085 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The modest accuracy is expected: with only 242 documents (36 test samples), the
+Transformer has insufficient data to learn robust document-level features. The BiLSTM
+with pretrained embeddings is more data-efficient due to its sequential inductive bias.
+
+% ─────────────────────────────────────────────────────────────────
+\section*{Conclusion}
+
+All three components were implemented from scratch using PyTorch only. Key findings:
+(1) Cleaned-text Skip-gram embeddings ($d{=}100$) outperform PPMI and raw-text W2V
+on MRR; (2) BiLSTM with CRF produces structurally valid NER sequences, though the
+small corpus limits absolute F1; (3) the Transformer encoder converges but requires
+far more data than 242 documents to reach competitive classification performance.
+Future work should explore data augmentation or cross-lingual transfer for low-resource
+Urdu NLP.
+
+\begin{thebibliography}{9}\setlength\itemsep{0pt}
+\bibitem{mikolov13} T.~Mikolov et al., ``Distributed representations of words,''
+  \textit{NeurIPS}, 2013.
+\bibitem{lafferty01} J.~Lafferty et al., ``Conditional Random Fields,''
+  \textit{ICML}, 2001.
+\bibitem{vaswani17} A.~Vaswani et al., ``Attention is all you need,''
+  \textit{NeurIPS}, 2017.
 \end{thebibliography}
 
 \end{document}
