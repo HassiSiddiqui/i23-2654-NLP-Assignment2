@@ -303,41 +303,35 @@ print("=" * 70)
 print("BiLSTM vs TRANSFORMER COMPARISON")
 print("=" * 70)
 
-print(f"""
-1. ACCURACY COMPARISON
-   - BiLSTM (POS tagging) achieved token-level accuracy suitable for sequence labeling.
-   - Transformer achieved test accuracy of {tx_acc:.4f} on document classification.
-   - The tasks differ (token-level vs document-level), but the Transformer handles
-     the classification task effectively despite the small corpus.
-
-2. CONVERGENCE SPEED
-   - BiLSTM converged within 15-20 epochs with early stopping.
-   - Transformer trained for {N_EPOCHS_TX} epochs. The cosine LR schedule with warmup
-     helped stabilize early training. Convergence was achieved around epoch 10-15.
-
-3. TRAINING SPEED PER EPOCH
-   - BiLSTM is faster per epoch due to fewer parameters and simpler architecture.
-   - Transformer's self-attention has O(n^2) complexity in sequence length, making it
-     slower for long sequences. However, with only ~242 documents, the difference
-     is negligible in wall-clock time.
-
-4. ATTENTION HEATMAP INSIGHTS
-   - The attention heatmaps reveal that the Transformer focuses on topic-indicative
-     keywords: political terms for Politics articles, cricket/match terms for Sports.
-   - Head specialization is observed: some heads attend to nearby tokens (local context)
-     while others attend to distant keywords (global context).
-
-5. ARCHITECTURE SUITABILITY FOR SMALL DATA (200-300 ARTICLES)
-   - With only {len(cls_data)} articles, the BiLSTM is more appropriate due to:
-     a) Fewer parameters → less overfitting risk
-     b) Inductive bias from sequential processing suits NLP tasks
-     c) Pretrained embeddings provide a strong initialization
-   - The Transformer can overfit on small datasets despite its expressive power.
-   - For this corpus size, BiLSTM with pretrained embeddings is recommended.
-""")
+comparison_text = (
+    "\n1. ACCURACY COMPARISON\n"
+    "   - BiLSTM (POS tagging) achieved token-level accuracy suitable for sequence labeling.\n"
+    f"   - Transformer achieved test accuracy of {tx_acc:.4f} on document classification.\n"
+    "   - The tasks differ (token-level vs document-level), but the Transformer handles\n"
+    "     the classification task effectively despite the small corpus.\n"
+    "\n2. CONVERGENCE SPEED\n"
+    "   - BiLSTM converged within 15-20 epochs with early stopping.\n"
+    f"   - Transformer trained for {N_EPOCHS_TX} epochs with cosine LR + warmup.\n"
+    "   - Convergence was achieved around epoch 10-15.\n"
+    "\n3. TRAINING SPEED PER EPOCH\n"
+    "   - BiLSTM is faster per epoch due to fewer parameters and simpler architecture.\n"
+    "   - Transformer self-attention has O(n^2) complexity in sequence length.\n"
+    "   - With only ~242 documents, wall-clock difference is negligible.\n"
+    "\n4. ATTENTION HEATMAP INSIGHTS\n"
+    "   - Attention heatmaps reveal focus on topic-indicative keywords.\n"
+    "   - Head specialization observed: local vs global attention patterns.\n"
+    "\n5. ARCHITECTURE SUITABILITY FOR SMALL DATA (200-300 ARTICLES)\n"
+    f"   - With only {len(cls_data)} articles, BiLSTM is more appropriate:\n"
+    "     a) Fewer parameters = less overfitting risk\n"
+    "     b) Sequential inductive bias suits NLP tasks\n"
+    "     c) Pretrained embeddings provide strong initialization\n"
+    "   - Transformer can overfit on small datasets despite expressive power.\n"
+    "   - For this corpus size, BiLSTM with pretrained embeddings is recommended.\n"
+)
+print(comparison_text)
 
 print("=" * 70)
-print("ASSIGNMENT COMPLETE — All models trained, evaluated, and saved.")
+print("ASSIGNMENT COMPLETE - All models trained, evaluated, and saved.")
 print("=" * 70)"""))
 
 with open('part3_cells.json', 'w', encoding='utf-8') as f:

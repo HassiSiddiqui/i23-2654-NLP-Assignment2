@@ -255,7 +255,7 @@ cat_colors = {'Politics': '#e74c3c', 'Sports': '#2ecc71', 'Economy': '#3498db',
               'International': '#f39c12', 'Health_Society': '#9b59b6', 'Other': '#95a5a6'}
 
 # Run t-SNE
-tsne = TSNE(n_components=2, perplexity=min(30, TOP_N-1), random_state=42, n_iter=1000)
+tsne = TSNE(n_components=2, perplexity=min(30, TOP_N-1), random_state=42, max_iter=1000)
 coords = tsne.fit_transform(top_vectors)
 
 fig, ax = plt.subplots(1, 1, figsize=(14, 10))

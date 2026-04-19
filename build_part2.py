@@ -507,7 +507,7 @@ y_true_ner = Y_test_ner.numpy().flatten()[mask]
 y_pred_ner = test_preds_ner.numpy().flatten()[mask]
 ner_names = [t for t in NER_TAGS if t != '<PAD>']
 print("=== NER Classification Report (with CRF) ===")
-print(classification_report(y_true_ner, y_pred_ner, target_names=ner_names, zero_division=0))
+print(classification_report(y_true_ner, y_pred_ner, labels=range(len(ner_names)), target_names=ner_names, zero_division=0))
 
 # Without CRF
 ner_nocrf.eval()
@@ -515,7 +515,7 @@ with torch.no_grad():
     nocrf_preds = ner_nocrf(X_test_ner.to(DEVICE), L_test_ner).argmax(-1).cpu()
 y_pred_nocrf = nocrf_preds.numpy().flatten()[mask]
 print("=== NER Classification Report (without CRF) ===")
-print(classification_report(y_true_ner, y_pred_nocrf, target_names=ner_names, zero_division=0))
+print(classification_report(y_true_ner, y_pred_nocrf, labels=range(len(ner_names)), target_names=ner_names, zero_division=0))
 
 f1_crf = f1_score(y_true_ner, y_pred_ner, average='macro', zero_division=0)
 f1_nocrf = f1_score(y_true_ner, y_pred_nocrf, average='macro', zero_division=0)
